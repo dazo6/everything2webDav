@@ -49,6 +49,14 @@ public class EverythingController {
     @Autowired
     private PathConfig pathConfig;
 
+    @RequestMapping(value = "")
+    public void handleWebDavRoot(HttpServletRequest request, HttpServletResponse response,
+                             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+        String method = request.getMethod().toUpperCase();
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+
+        log.info("Method: {}, Path: {}", method, path);
+    }
 
     @RequestMapping(value = "/**")
     public void handleWebDav(HttpServletRequest request, HttpServletResponse response,
@@ -174,6 +182,7 @@ public class EverythingController {
         response.setStatus(HttpStatus.OK.value());
         response.setHeader("Allow", "OPTIONS, GET, HEAD, POST, DELETE, TRACE, PROPFIND, PROPPATCH, COPY, MOVE, LOCK, UNLOCK");
         response.setHeader("DAV", "1, 2");
+        response.setHeader("MS-Author-Via", "DAV");
     }
 
     private void handlePropfind(HttpServletRequest request, HttpServletResponse response, String authHeader, String path, String realPath) throws IOException {
