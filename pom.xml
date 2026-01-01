@@ -61,6 +61,7 @@
         </dependency>
     </dependencies>
     <build>
+        <finalName>everything2webDav</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
