@@ -33,4 +33,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh release upload ${{ github.ref_name }} target/*.jar run.bat --clobber
+        gh release upload ${{ github.ref_name }} target/*.jar --clobber
