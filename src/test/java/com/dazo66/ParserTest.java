@@ -4,10 +4,14 @@ import com.dazo66.model.EverythingFileItem;
 import com.dazo66.util.EverythingHtmlParser;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.util.UriUtils;
 
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+
+import static com.dazo66.util.EverythingHtmlParser.decodePath;
 
 public class ParserTest {
 
@@ -333,6 +337,9 @@ public class ParserTest {
     @SneakyThrows
     @Test
     public void testDecode() {
+        String decode1 = decodePath("/D%3A/OneDrive/色图/本子/(Ono Rin)/2193728-[(Ono Rin)] oyobanu koi no dōjōyaburi  无望之恋的踢馆 [Chinese]");
+        System.out.println(decode1);
+        System.out.println(UriUtils.encodePath(decode1, "UTF-8"));
         System.out.println(URLDecoder.decode("/D%3A/OneDrive/色图/本子/(Ono%20Rin)/2193728-%5B(Ono%20Rin)%5D%20oyobanu%20koi%20no%20dōjōyaburi%20%20无望之恋的踢馆%20%5BChinese%5D", "UTF-8"));
         String decode = URLDecoder.decode("%2FD%3A%2F%E7%95%AA%E5%89%A7%2F%5BDBD-Raws%5D%5B%E8%8B%B1%E9%9B%84%E6%95%99%E5%AE%A4%5D%5B01-12TV%E5%85%A8%E9%9B%86%2BOVA%2B%E7%89%B9%E5%85%B8%E6%98%A0%E5%83%8F%5D%5B1080P%5D%5BBDRip%5D%5BHEVC-10bit%5D%5B%E7%AE%80%E7%B9%81%E5%A4%96%E6%8C%82%5D%5BFLAC%5D%5BMKV%5D%2F%E7%89%B9%E5%85%B8%E6%98%A0%E5%83%8F%2F%5BDBD-Raws%5D%5BEiyuu+Kyoushitsu%5D%5BTokuten%5D%5B01%5D%5B1080P%5D%5BBDRip%5D%5BHEVC-10bit%5D%5BFLAC%5D.mkv",
                 "UTF-8");

@@ -6,9 +6,15 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.util.Assert;
+import org.springframework.util.StreamUtils;
+import org.springframework.web.util.UriUtils;
 
+import java.io.ByteArrayOutputStream;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -19,7 +25,7 @@ public class EverythingHtmlParser {
 
     @SneakyThrows
     public static String decodePath(String path) {
-        path = URLDecoder.decode(path, "UTF-8");
+        path = uriDecode(path, StandardCharsets.UTF_8);
         if (path.contains("%"))
             return decodePath(path);
         return path;
@@ -35,10 +41,44 @@ public class EverythingHtmlParser {
         if (content == null || content.isEmpty()) {
             return content;
         }
-        // 第一步：使用URLEncoder完成基础UTF-8编码
-        String encoded = URLEncoder.encode(content, "UTF-8");
-        // 第二步：将+替换为%20，适配RFC 3986规范
-        return encoded.replace("+", "%20");
+        return UriUtils.encodePath(content, "UTF-8");
+    }
+
+
+    @SneakyThrows
+    public static String uriDecode(String source, Charset charset) {
+        int length = source.length();
+        if (length == 0) {
+            return source;
+        }
+        Assert.notNull(charset, "Charset must not be null");
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(length);
+        boolean changed = false;
+        for (int i = 0; i < length; i++) {
+            int ch = source.charAt(i);
+            if (ch == '%') {
+                if (i + 2 < length) {
+                    char hex1 = source.charAt(i + 1);
+                    char hex2 = source.charAt(i + 2);
+                    int u = Character.digit(hex1, 16);
+                    int l = Character.digit(hex2, 16);
+                    if (u == -1 || l == -1) {
+                        throw new IllegalArgumentException("Invalid encoded sequence \"" + source.substring(i) + "\"");
+                    }
+                    baos.write((char) ((u << 4) + l));
+                    i += 2;
+                    changed = true;
+                }
+                else {
+                    throw new IllegalArgumentException("Invalid encoded sequence \"" + source.substring(i) + "\"");
+                }
+            }
+            else {
+                baos.write(Character.valueOf((char) ch).toString().getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        return (changed ? StreamUtils.copyToString(baos, charset) : source);
     }
 
 

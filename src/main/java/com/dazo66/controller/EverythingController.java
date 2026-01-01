@@ -9,11 +9,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,8 +43,12 @@ public class EverythingController {
     @Value("${everything.url:http://192.168.0.200:60004/}")
     private String everythingUrl;
 
+    private volatile List<EverythingFileItem> rootCache;
+
+
     @Autowired
     private PathConfig pathConfig;
+
 
     @RequestMapping(value = "/**")
     public void handleWebDav(HttpServletRequest request, HttpServletResponse response,
@@ -57,9 +64,13 @@ public class EverythingController {
             response.getWriter().write("Unauthorized: Please log in.");
             return;
         }
+        if (rootCache == null && !checkAuth(authHeader, response)) {
+            return;
+        }
 
         String urlPath = path;
         path = decodePath(path);
+        path = completeDrivePath(path);
         String realPath = getRealPath(path);
 
         log.info("Method: {}, UrlPath: {}, Path: {}, realPath: {}", method, urlPath, path, realPath);
@@ -72,17 +83,17 @@ public class EverythingController {
                     handlePropfind(request, response, authHeader, path, realPath);
                     break;
                 case "GET":
-                    if (checkAuth(authHeader, path, response)) {
+                    if (checkAuth(authHeader, response)) {
                         handleGet(request, response, realPath);
                     }
                     break;
                 case "PUT":
-                    if (checkAuth(authHeader, path, response)) {
+                    if (checkAuth(authHeader, response)) {
                         handlePut(request, response, realPath);
                     }
                     break;
                 case "DELETE":
-                    if (checkAuth(authHeader, path, response)) {
+                    if (checkAuth(authHeader, response)) {
                         handleDelete(response, realPath);
                     }
                     break;
@@ -90,12 +101,12 @@ public class EverythingController {
                     handleMkcol(request, response, realPath);
                     break;
                 case "MOVE":
-                    if (checkAuth(authHeader, path, response)) {
+                    if (checkAuth(authHeader, response)) {
                         handleMove(request, response, realPath);
                     }
                     break;
                 case "COPY":
-                    if (checkAuth(authHeader, path, response)) {
+                    if (checkAuth(authHeader, response)) {
                         handleCopy(request, response, realPath);
                     }
                     break;
@@ -113,6 +124,25 @@ public class EverythingController {
             log.error("Error handling request", e);
             // response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), e.getMessage());
         }
+    }
+
+    /**
+     * 填充磁盘驱动器前缀
+     * @param path
+     * @return
+     */
+    private String completeDrivePath(String path) {
+        if (rootCache != null && !path.equals("/")) {
+            String rootPath = path.substring(1, path.indexOf("/", 1));
+            for (EverythingFileItem fileItem : rootCache) {
+                String cacheRootPath = decodePath(fileItem.getPath());
+                String[] split = cacheRootPath.split("/");
+                if (split.length >= 3 && split[2].equals(rootPath)) {
+                    path = decodePath("/" + split[1] + path);
+                }
+            }
+        }
+        return path;
     }
 
 
@@ -148,7 +178,7 @@ public class EverythingController {
 
     private void handlePropfind(HttpServletRequest request, HttpServletResponse response, String authHeader, String path, String realPath) throws IOException {
         try {
-
+            String requestPath = decodePath(request.getRequestURI().substring(request.getContextPath().length()));
             File file = new File(realPath);
 
             Connection.Response execute = Jsoup.connect(everythingUrl + path)
@@ -161,9 +191,12 @@ public class EverythingController {
             String contentType = execute.header("Content-Type");
             List<EverythingFileItem> items;
 
-            String encodeUrl = encodePath(path);
+            String currentHref = encodePath(requestPath);
             if (contentType != null && contentType.startsWith("text/html")) {
                 items = EverythingHtmlParser.parse(execute.body());
+                if (!StringUtils.hasLength(path) || "/".equals(path)) {
+                    rootCache = items;
+                }
                 EverythingFileItem folderItem = new EverythingFileItem();
                 String name = path;
 
@@ -175,7 +208,7 @@ public class EverythingController {
                     name = "/"; // Root
                 }
                 folderItem.setName(name);
-                folderItem.setPath(encodeUrl);
+                folderItem.setPath(currentHref);
                 folderItem.setIsFile(false);
 
                 String depth = request.getHeader("Depth");
@@ -191,7 +224,7 @@ public class EverythingController {
                 }
             } else {
                 EverythingFileItem fileItem = new EverythingFileItem();
-                fileItem.setPath(encodeUrl);
+                fileItem.setPath(currentHref);
                 fileItem.setName(file.getName());
                 fileItem.setIsFile(true);
                 String contentLength = execute.header("Content-Length");
@@ -326,15 +359,20 @@ public class EverythingController {
     }
 
     @SneakyThrows
-    private boolean checkAuth(String authHeader, String path, HttpServletResponse response) {
+    private boolean checkAuth(String authHeader, HttpServletResponse response) {
         try {
             // 尝试连接一下 用于校验权限 无权限不可下载
-            Jsoup.connect(everythingUrl + path)
+            Connection.Response execute = Jsoup.connect(everythingUrl)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .ignoreContentType(true)
                     .method(Connection.Method.GET)
-                    .maxBodySize(1024)
+                    .maxBodySize(1024000)
                     .execute();
+
+
+            rootCache = EverythingHtmlParser.parse(execute.body());
+
+
             return true;
         } catch (HttpStatusException e) {
             if (e.getStatusCode() == 401 || e.getStatusCode() == 403) {
