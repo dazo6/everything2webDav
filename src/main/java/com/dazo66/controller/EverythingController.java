@@ -9,13 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,15 +46,6 @@ public class EverythingController {
 
     @Autowired
     private PathConfig pathConfig;
-
-    @RequestMapping(value = "")
-    public void handleWebDavRoot(HttpServletRequest request, HttpServletResponse response,
-                             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
-        String method = request.getMethod().toUpperCase();
-        String path = request.getRequestURI().substring(request.getContextPath().length());
-
-        log.info("Method: {}, Path: {}", method, path);
-    }
 
     @RequestMapping(value = "/**")
     public void handleWebDav(HttpServletRequest request, HttpServletResponse response,
