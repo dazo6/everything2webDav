@@ -29,7 +29,7 @@ public class WebDavXmlUtil {
             String href = item.getPath();
             if (href == null) href = "";
 
-            xml.append("    <D:href>").append(href).append("</D:href>\n");
+            xml.append("    <D:href>").append(escapeXml(href)).append("</D:href>\n");
             
             xml.append("    <D:propstat>\n");
             xml.append("      <D:prop>\n");
