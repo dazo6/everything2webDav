@@ -4,6 +4,8 @@ Everything2WebDav 是一个 Java Spring Boot 应用程序，旨在充当桥梁�
 
 通过本项目，你可以使用任何支持 WebDAV 的客户端（如 CX文件管理器、FE文件管理器、流舟文件 等）直接浏览、搜索、播放和下载 Everything 索引的文件。部分客户端的协议实现可能有差异，如果存在bad case可以提issues。
 
+<img alt="项目架构图" src="architecture.svg">
+
 ## ✨ 主要功能
 
 *   **WebDAV 协议支持**: 实现了 WebDAV 的核心方法，包括 `PROPFIND`, `GET`, `HEAD`, `OPTIONS` 等。
