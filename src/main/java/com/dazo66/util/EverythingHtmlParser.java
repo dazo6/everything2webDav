@@ -20,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class EverythingHtmlParser {
 
@@ -123,8 +124,11 @@ public class EverythingHtmlParser {
             
             items.add(item);
         }
-        
-        return items;
+
+        long i = System.currentTimeMillis();
+        List<EverythingFileItem> collect = items.stream().distinct().collect(Collectors.toList());
+        System.out.printf("去重耗时: %d%n", System.currentTimeMillis() - i);
+        return collect;
     }
 
     private static Double parseSizeToKb(String sizeStr) {
