@@ -6,6 +6,7 @@ import com.dazo66.util.EverythingHtmlParser;
 import com.dazo66.util.WebDavXmlUtil;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
@@ -43,6 +44,9 @@ public class EverythingController {
 
     private volatile List<EverythingFileItem> rootCache;
 
+    private volatile String authCache;
+
+
 
     @Autowired
     private PathConfig pathConfig;
@@ -64,9 +68,8 @@ public class EverythingController {
         if (rootCache == null && !checkAuth(authHeader, response)) {
             return;
         }
-
-        String urlPath = path;
         path = decodePath(path);
+        String urlPath = path;
         path = completeDrivePath(path);
         String realPath = getRealPath(path);
 
@@ -77,7 +80,7 @@ public class EverythingController {
                     handleOptions(response);
                     break;
                 case "PROPFIND":
-                    handlePropfind(request, response, authHeader, path, realPath);
+                    handlePropfind(request, response, authHeader, urlPath, path, realPath);
                     break;
                 case "GET":
                     if (checkAuth(authHeader, response)) {
@@ -130,12 +133,14 @@ public class EverythingController {
      */
     private String completeDrivePath(String path) {
         if (rootCache != null && !path.equals("/")) {
-            String rootPath = path.substring(1, path.indexOf("/", 1));
+            log.info("path: {}", path);
+            int endIndex = path.indexOf("/", 1);
+            String rootPath = path.substring(1, endIndex == -1 ? path.length() : endIndex);
             for (EverythingFileItem fileItem : rootCache) {
                 String cacheRootPath = decodePath(fileItem.getPath());
-                String[] split = cacheRootPath.split("/");
-                if (split.length >= 3 && split[2].equals(rootPath)) {
-                    path = decodePath("/" + split[1] + path);
+                if (cacheRootPath.equals("/")) continue;
+                if (cacheRootPath.endsWith(rootPath)) {
+                    path = decodePath(cacheRootPath + path.substring(1 + rootPath.length()));
                 }
             }
         }
@@ -174,7 +179,7 @@ public class EverythingController {
         response.setHeader("MS-Author-Via", "DAV");
     }
 
-    private void handlePropfind(HttpServletRequest request, HttpServletResponse response, String authHeader, String path, String realPath) throws IOException {
+    private void handlePropfind(HttpServletRequest request, HttpServletResponse response, String authHeader, String urlPath, String path, String realPath) throws IOException {
         try {
             String requestPath = decodePath(request.getRequestURI().substring(request.getContextPath().length()));
             File file = new File(realPath);
@@ -189,25 +194,13 @@ public class EverythingController {
             String contentType = execute.header("Content-Type");
             List<EverythingFileItem> items;
 
-            String currentHref = encodePath(requestPath);
+            String currentHref = requestPath;
             if (contentType != null && contentType.startsWith("text/html")) {
                 items = EverythingHtmlParser.parse(execute.body());
                 if (!StringUtils.hasLength(path) || "/".equals(path)) {
                     rootCache = items;
                 }
-                EverythingFileItem folderItem = new EverythingFileItem();
-                String name = path;
-
-                if (name.endsWith("/")) name = name.substring(0, name.length() - 1);
-                int lastSlash = name.lastIndexOf('/');
-                if (lastSlash >= 0) {
-                    name = name.substring(lastSlash + 1);
-                } else if (name.isEmpty()) {
-                    name = "/"; // Root
-                }
-                folderItem.setName(name);
-                folderItem.setPath(currentHref);
-                folderItem.setIsFile(false);
+                EverythingFileItem folderItem = buildFileItem(path, currentHref);
 
                 String depth = request.getHeader("Depth");
                 if ("0".equals(depth)) {
@@ -232,6 +225,10 @@ public class EverythingController {
                 items = Collections.singletonList(fileItem);
             }
 
+            items.forEach(everythingFileItem -> {
+                everythingFileItem.setPath(encodePath(everythingFileItem.getPath().replace(path, urlPath)));
+            });
+
             String webDavXml = WebDavXmlUtil.toWebDavXml(items);
             response.setStatus(207); // Multi-Status
             response.setCharacterEncoding("UTF-8");
@@ -247,6 +244,24 @@ public class EverythingController {
                 response.sendError(e.getStatusCode(), e.getMessage());
             }
         }
+    }
+
+    @NotNull
+    private static EverythingFileItem buildFileItem(String path, String currentHref) {
+        EverythingFileItem folderItem = new EverythingFileItem();
+        String name = path;
+
+        if (name.endsWith("/")) name = name.substring(0, name.length() - 1);
+        int lastSlash = name.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            name = name.substring(lastSlash + 1);
+        } else if (name.isEmpty()) {
+            name = "/"; // Root
+        }
+        folderItem.setName(name);
+        folderItem.setPath(currentHref);
+        folderItem.setIsFile(false);
+        return folderItem;
     }
 
     private void handleGet(HttpServletRequest request, HttpServletResponse response, String realPath) throws IOException {
@@ -296,9 +311,12 @@ public class EverythingController {
                  OutputStream out = response.getOutputStream()) {
                 byte[] buffer = new byte[8192];
                 int bytesRead;
+                int total = 0;
                 while ((bytesRead = in.read(buffer)) != -1) {
                     out.write(buffer, 0, bytesRead);
+                    total += bytesRead;
                 }
+                log.info("download file fileLength {} total {}", fileLength, total);
             }
         } else {
             // Partial content
@@ -359,6 +377,11 @@ public class EverythingController {
     @SneakyThrows
     private boolean checkAuth(String authHeader, HttpServletResponse response) {
         try {
+
+            if (StringUtils.hasText(authHeader) && authHeader.equals(authCache)) {
+                return true;
+            }
+
             // 尝试连接一下 用于校验权限 无权限不可下载
             Connection.Response execute = Jsoup.connect(everythingUrl)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
@@ -369,8 +392,7 @@ public class EverythingController {
 
 
             rootCache = EverythingHtmlParser.parse(execute.body());
-
-
+            authCache = authHeader;
             return true;
         } catch (HttpStatusException e) {
             if (e.getStatusCode() == 401 || e.getStatusCode() == 403) {

@@ -26,9 +26,10 @@ public class EverythingHtmlParser {
 
     @SneakyThrows
     public static String decodePath(String path) {
-        path = uriDecode(path, StandardCharsets.UTF_8);
-        if (path.contains("%"))
-            return decodePath(path);
+        String path1 = uriDecode(path, StandardCharsets.UTF_8);
+        if (path1.equals(path)) return path1;
+        path = path1;
+        if (path.contains("%")) return decodePath(path);
         return path;
     }
 
@@ -65,14 +66,15 @@ public class EverythingHtmlParser {
                     int u = Character.digit(hex1, 16);
                     int l = Character.digit(hex2, 16);
                     if (u == -1 || l == -1) {
-                        throw new IllegalArgumentException("Invalid encoded sequence \"" + source.substring(i) + "\"");
+                        baos.write(Character.valueOf((char) ch).toString().getBytes(StandardCharsets.UTF_8));
+                        continue;
                     }
                     baos.write((char) ((u << 4) + l));
                     i += 2;
                     changed = true;
                 }
                 else {
-                    throw new IllegalArgumentException("Invalid encoded sequence \"" + source.substring(i) + "\"");
+                    baos.write(Character.valueOf((char) ch).toString().getBytes(StandardCharsets.UTF_8));
                 }
             }
             else {
@@ -104,7 +106,7 @@ public class EverythingHtmlParser {
                 Element nameLink = nameTd.selectFirst("span > nobr > a");
                 if (nameLink != null) {
                     item.setName(nameLink.ownText());
-                    item.setPath((nameLink.attr("href")));
+                    item.setPath(decodePath(nameLink.attr("href")));
                 }
             } else {
                  continue;
@@ -127,7 +129,6 @@ public class EverythingHtmlParser {
 
         long i = System.currentTimeMillis();
         List<EverythingFileItem> collect = items.stream().distinct().collect(Collectors.toList());
-        System.out.printf("去重耗时: %d%n", System.currentTimeMillis() - i);
         return collect;
     }
 

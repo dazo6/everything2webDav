@@ -337,6 +337,9 @@ public class ParserTest {
     @SneakyThrows
     @Test
     public void testDecode() {
+        String decode2 = decodePath("50%OFF");
+        System.out.println(decode2);
+
         String decode1 = decodePath("/D%3A/OneDrive/色图/本子/(Ono Rin)/2193728-[(Ono Rin)] oyobanu koi no dōjōyaburi  无望之恋的踢馆 [Chinese]");
         System.out.println(decode1);
         System.out.println(UriUtils.encodePath(decode1, "UTF-8"));
