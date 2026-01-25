@@ -9,15 +9,19 @@ import org.jsoup.select.Elements;
 import org.springframework.util.Assert;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.util.UriUtils;
+import org.yaml.snakeyaml.util.ArrayUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -57,6 +61,7 @@ public class EverythingHtmlParser {
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream(length);
         boolean changed = false;
+        List<Character> characters = new ArrayList<>();
         for (int i = 0; i < length; i++) {
             int ch = source.charAt(i);
             if (ch == '%') {
@@ -66,22 +71,37 @@ public class EverythingHtmlParser {
                     int u = Character.digit(hex1, 16);
                     int l = Character.digit(hex2, 16);
                     if (u == -1 || l == -1) {
-                        baos.write(Character.valueOf((char) ch).toString().getBytes(StandardCharsets.UTF_8));
+                        characters.add((char)ch);
                         continue;
                     }
-                    baos.write((char) ((u << 4) + l));
+                    baos.write(((u << 4) + l));
                     i += 2;
                     changed = true;
+                } else {
+                    characters.add((char)ch);
                 }
-                else {
-                    baos.write(Character.valueOf((char) ch).toString().getBytes(StandardCharsets.UTF_8));
+            } else {
+                if (baos.size() > 0) {
+                    String string = StreamUtils.copyToString(baos, charset);
+                    for (int i1 = 0; i1 < string.toCharArray().length; i1++) {
+                        characters.add(string.charAt(i1));
+                    }
+                    baos = new ByteArrayOutputStream();
                 }
-            }
-            else {
-                baos.write(Character.valueOf((char) ch).toString().getBytes(StandardCharsets.UTF_8));
+                characters.add((char)ch);
             }
         }
-        return (changed ? StreamUtils.copyToString(baos, charset) : source);
+        if (baos.size() > 0) {
+            String string = StreamUtils.copyToString(baos, charset);
+            for (int i1 = 0; i1 < string.toCharArray().length; i1++) {
+                characters.add(string.charAt(i1));
+            }
+        }
+        char[] chars = new char[characters.size()];
+        for (int i = 0; i < characters.size(); i++) {
+            chars[i] = characters.get(i);
+        }
+        return (changed ? new String(chars) : source);
     }
 
 
@@ -178,5 +198,13 @@ public class EverythingHtmlParser {
         } catch (ParseException e) {
             return null;
         }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(uriDecode("\uD83E\uDD5A", Charset.defaultCharset()));
+        System.out.println(uriDecode("/D%3A/OneDrive/%E8%89%B2%E5%9B%BE/test/\uD83E\uDD5A/", Charset.defaultCharset()));
+        System.out.println("\uD83E\uDD5A".charAt(0));
+        System.out.println(String.valueOf("\uD83E\uDD5A".charAt(0)));
+        System.out.println("\uD83E\uDD5A".charAt(1));
     }
 }
